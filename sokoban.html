@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Sokoban</title>
+<script src="levels_sokoban.js"></script>
+<style>
+
+#main {
+	text-align: center;
+}
+
+#logo {
+	margin: 30px;
+	border-radius: 10px;
+}
+
+#comment {
+	height: 370px;
+	font-size: x-large;
+	vertical-align: top;
+	display: inline-block;
+	border: 2px solid #aa0;
+	border-radius: 10px;
+	padding: 20px;
+	margin-right: 20px;
+}
+
+#command {
+	border-collapse: collapse;
+	display: inline-block;
+}
+
+#up, #left, #right, #down {
+	width: 60px;
+	height: 60px;
+}
+
+#board {
+	position: relative;
+	top: 0px;
+	left: 0px;
+	display: inline-block;
+	border: 5px solid #aa0;
+	border-radius: 10px;
+}
+
+#message {
+	position: absolute;
+	width: 300px;
+	padding: 20px;
+	top: 0px;
+	left: 0px;
+	border: 5px solid #66f;
+	border-radius: 10px;
+	background-color: rgba(200, 200, 200, 0.6);
+	z-index: 2;
+	font-size: xx-large;
+}
+
+#nextLevel {
+	font-size: x-large;
+}
+
+#board > img {
+	position: absolute;
+}
+
+#level {
+	font-size: xx-large;
+	border: 2px solid #aa0;
+	border-radius: 10px;
+	padding: 5px;
+}
+
+#rules {
+	font-size: large;
+}
+</style>
+
+<script>
+"use strict";
+
+var board = {
+
+	animation : "off",  // on during move animation
+	cellSize : 40,      // cell size in px (cells are square)
+	xsb : undefined,    // map of current level
+	currentLevel : 0,   // all maps level are in levels list
+	character : {},     // {"r": row, "c": col, "elem": DOM_Element}
+	boxes : {},         // {"3:4": DOM_Element, "2:9": ...}
+	walls : {},         // {"5:8": true, "7,9": ...}
+	goals : [],         // ["1:2", "3:6", ...]   "row:col"
+
+	setLevel : function(level) {
+		if(level < levels.length) {
+		//if(level < 3) {
+			document.getElementById("level").innerHTML = "Level ";
+			document.getElementById("level").innerHTML += (level + 1);
+			this.currentLevel = level;
+			this.xsb = levels[level];
+			this.drawMap();
+			document.getElementById("message").style.display = "none";
+		} else {
+			alert("Error in setLevel function : no more level");
+		}
+
+	},
+
+	nextLevel : function () {
+		board.setLevel(board.currentLevel + 1);
+	},
+
+	levelCompleted : function() {
+		var messageElem;
+		messageElem = document.getElementById("message");
+		messageElem.style.display = "inline-block";
+		if(this.currentLevel === levels.length-1) {
+			messageElem.innerHTML = "Last level completed !<br/> Game completed !";
+		}
+	},
+
+
+	drawMap : function () {
+		var r, c;
+		var img;
+		var boardElem;
+		var messageElem;
+		var nbRow;
+		var nbCol;
+		var i;
+		var domRectBoard;
+		var domRectMessage;
+
+		// COMPUTE BOARD SIZE
+
+		nbRow = this.xsb.length;
+		nbCol = this.xsb.reduce(function (a, b) {
+			return a.length > b.length ? a : b; 
+		}).length;
+
+		// CREATE BOARD AND SET SIZE
+
+		boardElem = document.getElementById("board");
+		if(boardElem) {
+			boardElem.remove();
+		}
+
+		boardElem = document.createElement("div");
+		document.getElementById("main").appendChild(boardElem);
+		boardElem.id = "board";
+		boardElem.style.width = (this.cellSize * nbCol) + "px";
+		boardElem.style.height = (this.cellSize * nbRow) + "px";
+		domRectBoard = boardElem.getBoundingClientRect();
+
+		messageElem = document.getElementById("message");
+		domRectMessage = messageElem.getBoundingClientRect();
+		messageElem.style.left = domRectBoard.left + (domRectBoard.width - domRectMessage.width)/2 + "px";
+		messageElem.style.top = domRectBoard.top + (domRectBoard.height - domRectMessage.height)/2 + "px";
+
+		// REINIT BOARD
+
+		this.character = {};
+		this.boxes = {};
+		this.walls = {};
+		this.goals = [];
+
+		// DRAW BOARD
+
+		for(r=0; r < nbRow; r++) {
+			for(c=0; c < nbCol; c++) {
+
+				img = document.createElement("img");
+				img.style.width = this.cellSize + "px";
+				img.style.height = this.cellSize + "px";
+				img.style.left =  this.rc2xy(r, c).x + "px";
+				img.style.top =  this.rc2xy(r, c).y + "px";
+				boardElem.appendChild(img);
+
+				// FIXE ELEMENTS
+
+				if(this.xsb[r][c] === "$") {
+					img.setAttribute("src", "assets/Ground_Grass.png");
+				} else if(this.xsb[r][c] === "@") {
+					img.setAttribute("src", "assets/Ground_Grass.png");
+				} else if(this.xsb[r][c] === "*") {
+					img.setAttribute("src", "assets/EndPoint_Brown.png");
+				} else if(this.xsb[r][c] === ".") {
+					img.setAttribute("src", "assets/EndPoint_Brown.png");
+					this.goals.push(r + ":" + c);
+				} else if(this.xsb[r][c] === "+") {
+					img.setAttribute("src", "assets/EndPoint_Brown.png");
+					this.goals.push(r + ":" + c);
+				} else if(this.xsb[r][c] === "#") {
+					img.setAttribute("src", "assets/Wall_Brown.png");
+					this.walls[r + ":" + c] = true;
+				} else {
+					img.setAttribute("src", "assets/Ground_Grass.png");
+				}
+
+				// MOBILE ELEMENTS
+
+				img = document.createElement("img");
+				img.style.width = this.cellSize + "px";
+				img.style.height = this.cellSize + "px";
+				img.style.left =  this.rc2xy(r, c).x + "px";
+				img.style.top =  this.rc2xy(r, c).y + "px";
+				boardElem.appendChild(img);
+
+				if(this.xsb[r][c] === "@" || this.xsb[r][c] === "+") {
+					img.setAttribute("src", "assets/Character4.png");
+					img.style.zIndex = 1;
+					this.character.r = r;
+					this.character.c = c;
+					this.character.elem = img;	
+				} else if(this.xsb[r][c] === "$" || this.xsb[r][c] === "*") {
+					img.setAttribute("src", "assets/CrateDark_Red.png");
+					this.boxes[r + ":" + c] = {"elem" : img};
+					img.style.zIndex = 1;
+				} else {
+					img.remove();
+				}
+
+			}
+		}
+		
+	},
+
+	animate : function(newCharPos, newBoxPos) {
+
+		var startTime;
+		var x1Char, y1Char;
+		var x2Char, y2Char;
+		var x1Box, y1Box;
+		var x2Box, y2Box;
+		var deltaX, deltaY;
+		var that;
+		var delay;
+		var boxElem;
+
+		if(this.animation === "on") {
+			return;
+		}
+
+		if(newBoxPos) {
+			boxElem = this.boxes[newCharPos.r + ":" + newCharPos.c].elem;
+			//console.log(boxElem);
+			x1Box = this.rc2xy(newCharPos.r, newCharPos.c).x;
+			y1Box = this.rc2xy(newCharPos.r, newCharPos.c).y;
+			x2Box = x1Box;
+			y2Box = y1Box;
+		}
+
+		//console.log("old : " , this.character);
+		//console.log("new " , newCharPos);
+		delay = 0.2;
+
+		x1Char = this.rc2xy(this.character.r, this.character.c).x;
+		y1Char = this.rc2xy(this.character.r, this.character.c).y;
+
+		x2Char = this.rc2xy(newCharPos.r, newCharPos.c).x;
+		y2Char = this.rc2xy(newCharPos.r, newCharPos.c).y;
+
+		deltaX = (x2Char-x1Char);
+		deltaY = (y2Char-y1Char);
+
+		x2Char = x1Char;
+		y2Char = y1Char;
+
+		that = this;
+		startTime = null;
+		this.animation = "on";
+		function step(timestamp) {
+			//console.log(startTime + " : " + timestamp);
+			var stored;
+			var progress;
+			if (startTime === null) {
+				startTime = timestamp;
+			}
+			progress = (timestamp - startTime)/1000;
+			//console.log(progress);
+			that.setElemPosXY(that.character.elem, x2Char, y2Char);
+			x2Char = x1Char + (deltaX * Math.min(1, progress/delay));
+			y2Char = y1Char + (deltaY * Math.min(1, progress/delay));
+
+			if(boxElem) {
+				that.setElemPosXY(boxElem, x2Box, y2Box);
+				x2Box = x1Box + (deltaX * Math.min(1, progress/delay));
+				y2Box = y1Box + (deltaY * Math.min(1, progress/delay));
+			}
+
+			if (progress/delay < 1) {
+				requestAnimationFrame(step);
+			} else {
+				x2Char = that.rc2xy(newCharPos.r, newCharPos.c).x;
+				y2Char = that.rc2xy(newCharPos.r, newCharPos.c).y;
+				that.character.r = newCharPos.r;
+				that.character.c = newCharPos.c;
+				that.setElemPosXY(that.character.elem, x2Char, y2Char);
+
+				if(newBoxPos) {
+					x2Box = that.rc2xy(newBoxPos.r, newBoxPos.c).x;
+					y2Box = that.rc2xy(newBoxPos.r, newBoxPos.c).y;
+					delete that.boxes[newCharPos.r + ":" + newCharPos.c];
+					that.boxes[newBoxPos.r + ":" + newBoxPos.c] = {"elem": boxElem};
+					that.setElemPosXY(boxElem, x2Box, y2Box);
+				}
+
+				that.animation = "off";
+
+				stored = 0;
+				that.goals.forEach(function(goal) {
+					if(that.boxes[goal]) {
+						stored++;
+					}
+				});
+				//console.log(stored);
+
+				if(stored === that.goals.length) {
+				//if(stored >= 1) {
+					that.levelCompleted();
+				}
+			}
+		}
+
+		requestAnimationFrame(step);
+	},
+
+	rc2xy : function(r, c) {
+		var x, y;
+
+		x = (this.cellSize * c);
+		y = (this.cellSize * r);
+		return {"x": x, "y": y};
+	},
+
+	setElemPosXY : function(elem, x,y) {
+		//console.log(elem);
+		elem.style.left = x + "px";
+		elem.style.top = y + "px";
+	},
+
+	moveCharToDir: function(dir) {
+		var rChar, cChar;
+		var rBox, cBox;
+		var move;
+		var moveBox;
+
+		rChar = this.character.r;
+		cChar = this.character.c;
+
+		if(dir === "h") {
+			rChar--;
+		} else if(dir === "b") {
+			rChar++;
+		} else if(dir === "g") {
+			cChar--;
+		} else if(dir === "d") {
+			cChar++;
+		}
+
+		if(this.walls[rChar + ":" + cChar]) {
+			move = false;
+		} else if (this.boxes[rChar + ":" + cChar]) {
+		
+			rBox = rChar;
+			cBox = cChar;
+
+			if(dir === "h") {
+				rBox = rChar - 1;;
+			} else if(dir === "b") {
+				rBox = rChar + 1;
+			} else if(dir === "g") {
+				cBox = cChar - 1;
+			} else if(dir === "d") {
+				cBox = cChar + 1;
+			}
+
+			if(this.walls[rBox + ":" + cBox]) {
+				move = false;
+			} else if (this.boxes[rBox + ":" + cBox]) {
+				move = false;
+			} else {
+				move = true;
+				moveBox = true;
+			}
+
+		} else {
+			move = true;
+			moveBox = false;
+		}
+
+		if(move) {
+			if(moveBox) {
+				this.animate({"r": rChar, "c": cChar}, {"r": rBox, "c": cBox});
+			} else {
+				this.animate({"r": rChar, "c": cChar});
+			}
+		}
+	},
+
+	initUI : function() {
+		window.addEventListener("keydown", this.keyCommand);
+
+		document.getElementById("up").addEventListener("click", function() {
+			board.moveCharToDir("h");
+		});
+
+		document.getElementById("left").addEventListener("click", function() {
+			board.moveCharToDir("g");
+		});
+
+		document.getElementById("right").addEventListener("click", function() {
+			board.moveCharToDir("d");
+		});
+
+		document.getElementById("down").addEventListener("click", function() {
+			board.moveCharToDir("b");
+		});
+
+		document.getElementById("restart").addEventListener("click", function() {
+			board.setLevel(board.currentLevel);
+		});
+
+		document.getElementById("nextLevel").addEventListener("click", this.nextLevel);
+		this.setLevel(0);
+	},
+
+	keyCommand : function(e) {
+		var pos = {};
+
+		pos.r = board.character.r;
+		pos.c = board.character.c;
+
+		if(e.keyCode === 37) {
+			board.moveCharToDir("g");
+			//board.levelCompleted();
+		} else if(e.keyCode === 38) {
+			board.moveCharToDir("h");
+		} else if(e.keyCode === 39) {
+			board.moveCharToDir("d");
+		} else if(e.keyCode === 40) {
+			board.moveCharToDir("b");
+		} else if(e.key.toUpperCase() === "R") {
+			board.setLevel(board.currentLevel);
+		}
+	}
+
+}
+
+function clickCommand(e) {
+	var rc;
+	var r, c;
+
+	rc = e.target.getAttribute("rc");
+	r = Number(rc.split(":")[0]);
+	c = Number(rc.split(":")[1]);
+
+	if(r === board.character.r && c > board.character.c) {
+		board.moveCharToDir("d");
+	} else if (r === board.character.r && c < board.character.c) {
+		board.moveCharToDir("g");
+	} else if (c === board.character.c && r < board.character.r) {
+		board.moveCharToDir("h");
+	} else if (c === board.character.c && r > board.character.r) {
+		board.moveCharToDir("b");
+	}
+
+	//console.log(r + " " +c);
+}
+
+
+
+function start() {
+	board.initUI();
+}
+
+window.window.addEventListener("load", start);
+
+</script>
+
+</head>
+
+<body>
+
+	<div id="main">
+
+		<div id="comment">
+			<span id="level"></span>
+			<p id="rules">
+			Move character with
+			<br/>
+			keyboard arrows
+			<br/>
+			<table id="command">
+				<tr><td></td><td><img id="up" src="arrow_up.svg"></td><td></td></tr>
+				<tr><td><img id="left" src="arrow_left.svg"></td><td></td><td><img id="right" src="arrow_right.svg"></td></tr>
+				<tr><td></td><td><img id="down" src="arrow_down.svg"></td><td></td></tr>
+			</table>
+			<br/>
+			Press <button id="restart">R</button> to restart level
+			</p>
+		</div>
+		<div id="message">
+			Level completed<p/><button id="nextLevel">Next level
+		</div>
+
+	</div>
+
+</body>
+
+</html>
